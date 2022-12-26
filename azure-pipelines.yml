@@ -1,0 +1,65 @@
+name: $(BuildDefinitionName).$(DayOfYear)$(Rev:.r)
+
+variables:
+  - name: isMain
+    value: $[eq(variables['Build.SourceBranch'], 'refs/heads/master')]
+  - group: nocond-common
+  - group: nocond-identity
+  - group: nocond-identity-keyvault
+
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: NoCond/nocond-pipelines
+      ref: refs/tags/1.0.18
+
+# This build makes use of our standard function pipeline
+trigger:
+  branches:
+    # We use all these branches to produce artifacts
+    include:
+      - master
+      - feature/*
+      - hotfix/*
+
+  # Content in these locations can be ignored
+  paths:
+    exclude:
+      - docs/*
+      - "*.md"
+
+stages:
+  - stage: Build
+    displayName: Build - Service
+    dependsOn: []
+    jobs:
+      - template: dotnet/dotnet-service.yml@templates
+        parameters:
+          PROJECT_NAME: $(projectName)
+          VM_IMAGE: $(vmImage)
+          IMAGE_REPOSITORY: $(imageRepository)
+          DOCKER_REGISTRY_SERVICE_CONNECTION: $(dockerRegistryServiceConnection)
+          AZURE_CONTAINER_REGISTRY: $(containerRegistry)
+          DOCKER_FILE_PATH: $(dockerFilePath)
+          NPM_PACKAGE: false
+          NPM_FOLDER: $(npmFolder)
+          PAT: $(pat)
+
+  - stage: Deploy
+    condition: and(succeeded(), eq(variables.isMain, true))
+    displayName: Deploy stage
+    dependsOn: Build
+    variables:
+      imageTag: $[ stageDependencies.Build.Build_Containers.outputs['setversion.imageVersion'] ]
+    jobs:
+      - template: containers/deploy-kubernetes.yml@templates
+        parameters:
+          VM_IMAGE: $(vmImage)
+          IMAGE_REPOSITORY: $(imageRepository)
+          IMAGE_PULL_SECRET: $(imagePullSecret)
+          DEPLOYMENT_ENVIRONMENT: $(deploymentEnvironment)
+          DOCKER_REGISTRY_SERVICE_CONNECTION: $(dockerRegistryServiceConnection)
+          AZURE_CONTAINER_REGISTRY: $(containerRegistry)
+          DOCKER_FILE_PATH: $(dockerFilePath)
+          IMAGE_TAG: $(imageTag)

@@ -1,0 +1,19 @@
+apiVersion : apps/v1
+kind: Deployment
+metadata:
+  name: nocondidentity 
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nocondidentity
+  template:
+    metadata:
+      labels:
+        app: nocondidentity 
+    spec:
+      containers:
+        - name: nocondidentity 
+          image: nocond.azurecr.io/nocondidentity
+          ports:
+          - containerPort: 80
